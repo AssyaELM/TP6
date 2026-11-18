@@ -10,32 +10,55 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  security-checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     permissions:
       contents: read
+
     steps:
+      # On récupère le contenu du dépôt.
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
 
-      - name: Check repository
-        run: |
-          pwd
-          ls -la
+      # On installe Helm 3.16.4.
+      - name: Setup Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.16.4
 
-      # B3 - Construction de l'image Docker avec le SHA du commit
+      # On construit l'image Docker du projet.
       - name: Build image
         run: docker build -t tp6-web:${{ github.sha }} .
 
-      # B3 - Analyse de l'image construite avec Trivy
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      # On analyse l'image à la recherche de vulnérabilités HIGH et CRITICAL.
+      - name: Scan image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          scan-type: image
           image-ref: tp6-web:${{ github.sha }}
           format: table
           exit-code: "1"
           severity: "CRITICAL,HIGH"
           ignore-unfixed: true
 
+      # On vérifie la syntaxe et la structure du Chart Helm.
+      - name: Helm lint
+        run: helm lint ./charts/web
+
+      # On génère les manifests Kubernetes dans le namespace du projet.
+      - name: Render Kubernetes manifests
+        run: helm template web ./charts/web --namespace tp6-secure > rendered.yaml
+
+      # On analyse les manifests Kubernetes avec Trivy.
+      - name: Scan Kubernetes manifests
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: config
+          scan-ref: rendered.yaml
+          format: table
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
