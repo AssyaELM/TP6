@@ -1,3 +1,4 @@
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,6 +18,7 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 101
+        fsGroup: 101
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -28,8 +30,12 @@ spec:
               containerPort: 8080
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: nginx-tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: {{ .Values.resources.requests.cpu | quote }}
@@ -49,3 +55,7 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
+      volumes:
+        - name: nginx-tmp
+          emptyDir: {}
+
