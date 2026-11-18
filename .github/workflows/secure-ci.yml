@@ -1,0 +1,41 @@
+
+name: Secure CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Check repository
+        run: |
+          pwd
+          ls -la
+
+      # B3 - Construction de l'image Docker avec le SHA du commit
+      - name: Build image
+        run: docker build -t tp6-web:${{ github.sha }} .
+
+      # B3 - Analyse de l'image construite avec Trivy
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: tp6-web:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+
